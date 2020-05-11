@@ -1,0 +1,22 @@
+{
+  "name": "rabbit/prometheus",
+  "description": "rabbit prometheus",
+  "type": "library",
+  "require": {
+    "rabbit/framework": "dev-master",
+    "rabbit/httpclient": "dev-master",
+    "endclothing/prometheus_client_php": "^1.0"
+  },
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "albert",
+      "email": "63851587@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Rabbit\\Prometheus\\": "src/"
+    }
+  }
+}
