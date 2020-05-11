@@ -28,6 +28,13 @@ class TableMemory implements Adapter
      */
     private $histogramTable = null;
 
+    /** @var array */
+    private $counterMap = [];
+    /** @var array */
+    private $gaugeMap = [];
+    /** @var array */
+    private $histogramMap = [];
+
     /**
      * TableMemory constructor.
      * @param int $counterLine
@@ -45,7 +52,7 @@ class TableMemory implements Adapter
         $this->gaugeTable->create();
 
         $this->histogramTable = new Table($histogramLine);
-        $this->histogramTable->column('value', Table::TYPE_INT, 8);
+        $this->histogramTable->column('value', Table::TYPE_FLOAT);
         $this->histogramTable->create();
     }
 
@@ -54,8 +61,8 @@ class TableMemory implements Adapter
      */
     public function collect(): array
     {
-        $metrics = $this->internalCollect($this->counterTable);
-        $metrics = array_merge($metrics, $this->internalCollect($this->gaugeTable));
+        $metrics = $this->internalCollect($this->counterMap, $this->counterTable);
+        $metrics = array_merge($metrics, $this->internalCollect($this->gaugeMap, $this->gaugeTable));
         $metrics = array_merge($metrics, $this->collectHistograms());
         return $metrics;
     }
@@ -94,42 +101,48 @@ class TableMemory implements Adapter
     {
         $histograms = [];
         $data = [];
-        foreach ($this->histogramTable as $key => $row) {
-            [$name, $help, $type, $labelNames, $labelValues, $buckets, $bucketType] = explode(":", $key);
-            $key = implode(':', [$name, $type, $labelValues, $bucketType]);
-            if (isset($data[$key])) {
-                $data[$key] = [
-                    'name' => $name,
-                    'help' => $help,
-                    'type' => $type,
-                    'labelNames' => $this->decode($labelNames),
-                    'buckets' => $this->decode($buckets),
-                ];
-                // Add the Inf bucket so we can compute it later on
-                $data[$key]['buckets'][] = '+Inf';
+        foreach ($this->histogramMap as $histogram) {
+            $metaData = $histogram['meta'];
+            $data = [
+                'name' => $metaData['name'],
+                'help' => $metaData['help'],
+                'type' => $metaData['type'],
+                'labelNames' => $metaData['labelNames'],
+                'buckets' => $metaData['buckets'],
+            ];
+            // Add the Inf bucket so we can compute it later on
+            $data['buckets'][] = '+Inf';
+
+            $histogramBuckets = [];
+            foreach ($this->histogramTable as $key => $value) {
+                if (in_array($key, $histogram['samples'])) {
+                    $parts = explode(':', $key);
+                    $labelValues = $parts[2];
+                    $bucket = $parts[3];
+                    // Key by labelValues
+                    $histogramBuckets[$labelValues][$bucket] = $value['value'];
+                }
             }
-            $data[$key]['histogramBuckets'][$labelValues][$bucketType] = $row['value'];
-        }
-        foreach ($data as $item) {
+
             // Compute all buckets
-            $labels = array_keys($item['histogramBuckets']);
+            $labels = array_keys($histogramBuckets);
             sort($labels);
             foreach ($labels as $labelValues) {
                 $acc = 0;
                 $decodedLabelValues = $this->decode($labelValues);
-                foreach ($item['buckets'] as $bucket) {
+                foreach ($data['buckets'] as $bucket) {
                     $bucket = (string)$bucket;
-                    if (!isset($item['histogramBuckets'][$labelValues][$bucket])) {
-                        $item['samples'][] = [
-                            'name' => $item['name'] . '_bucket',
+                    if (!isset($histogramBuckets[$labelValues][$bucket])) {
+                        $data['samples'][] = [
+                            'name' => $metaData['name'] . '_bucket',
                             'labelNames' => ['le'],
                             'labelValues' => array_merge($decodedLabelValues, [$bucket]),
                             'value' => $acc,
                         ];
                     } else {
-                        $acc += $item['histogramBuckets'][$labelValues][$bucket];
-                        $item['samples'][] = [
-                            'name' => $item['name'] . '_' . 'bucket',
+                        $acc += $histogramBuckets[$labelValues][$bucket];
+                        $data['samples'][] = [
+                            'name' => $metaData['name'] . '_' . 'bucket',
                             'labelNames' => ['le'],
                             'labelValues' => array_merge($decodedLabelValues, [$bucket]),
                             'value' => $acc,
@@ -138,56 +151,57 @@ class TableMemory implements Adapter
                 }
 
                 // Add the count
-                $item['samples'][] = [
-                    'name' => $item['name'] . '_count',
+                $data['samples'][] = [
+                    'name' => $metaData['name'] . '_count',
                     'labelNames' => [],
                     'labelValues' => $decodedLabelValues,
                     'value' => $acc,
                 ];
 
                 // Add the sum
-                $item['samples'][] = [
-                    'name' => $item['name'] . '_sum',
+                $data['samples'][] = [
+                    'name' => $metaData['name'] . '_sum',
                     'labelNames' => [],
                     'labelValues' => $decodedLabelValues,
-                    'value' => $item['histogramBuckets'][$labelValues]['sum'],
+                    'value' => $histogramBuckets[$labelValues]['sum'],
                 ];
 
             }
-            $histograms[] = new MetricFamilySamples($item);
+            $histograms[] = new MetricFamilySamples($data);
         }
         return $histograms;
     }
 
     /**
-     * @param Table $metrics
+     * @param array $metrics
+     * @param Table $table
      * @return array
      */
-    private function internalCollect(Table $metrics): array
+    private function internalCollect(array $metrics, Table $table): array
     {
         $result = [];
-        $data = [];
-        foreach ($metrics as $key => $row) {
-            [$name, $help, $type, $labelNames, $labelValues] = explode(":", $key);
-            $key = implode(":", [$name, $type]);
-            if (!isset($result[$key])) {
-                $data[$key] = [
-                    'name' => $name,
-                    'help' => $help,
-                    'type' => $type,
-                    'labelNames' => $this->decode($labelNames),
-                ];
-            }
-            $data[$key]['samples'][] = [
-                'name' => $name,
-                'labelNames' => [],
-                'labelValues' => $this->decode($labelValues),
-                'value' => $row['value'],
+        foreach ($metrics as $metric) {
+            $metaData = $metric['meta'];
+            $data = [
+                'name' => $metaData['name'],
+                'help' => $metaData['help'],
+                'type' => $metaData['type'],
+                'labelNames' => $metaData['labelNames'],
             ];
-        }
-        foreach ($data as $item) {
-            $this->sortSamples($item['samples']);
-            $result[] = new MetricFamilySamples($item);
+            foreach ($table as $key => $value) {
+                if (in_array($key, $metric['samples'])) {
+                    $parts = explode(':', $key);
+                    $labelValues = $parts[2];
+                    $data['samples'][] = [
+                        'name' => $metaData['name'],
+                        'labelNames' => [],
+                        'labelValues' => $this->decode($labelValues),
+                        'value' => $value['value'],
+                    ];
+                }
+            }
+            $this->sortSamples($data['samples']);
+            $result[] = new MetricFamilySamples($data);
         }
         return $result;
     }
@@ -198,8 +212,18 @@ class TableMemory implements Adapter
      */
     public function updateHistogram(array $data): void
     {
+        $metaKey = $this->metaKey($data);
         $sumKey = $this->histogramBucketValueKey($data, 'sum');
-        $this->histogramTable->incr($sumKey, 'value', $data['value']);
+        if (array_key_exists($metaKey, $this->histogramMap) === false) {
+            $this->histogramMap[$metaKey] = [
+                'meta' => $this->metaData($data),
+                'samples' => [],
+            ];
+        }
+        $this->histogramTable->incr($sumKey, 'value', (float)$data['value']);
+        if (!in_array($sumKey, $this->histogramMap[$metaKey]['samples'])) {
+            $this->histogramMap[$metaKey]['samples'][] = $sumKey;
+        }
 
         $bucketToIncrease = '+Inf';
         foreach ($data['buckets'] as $bucket) {
@@ -210,7 +234,10 @@ class TableMemory implements Adapter
         }
 
         $bucketKey = $this->histogramBucketValueKey($data, $bucketToIncrease);
-        $this->histogramTable->incr($sumKey, 'value', 1);
+        $this->histogramTable->incr($bucketKey, 'value', (float)1);
+        if (!in_array($bucketKey, $this->histogramMap[$metaKey]['samples'])) {
+            $this->histogramMap[$metaKey]['samples'][] = $bucketKey;
+        }
     }
 
     /**
@@ -218,14 +245,21 @@ class TableMemory implements Adapter
      */
     public function updateGauge(array $data): void
     {
-        $internalKey = $this->internalKey($data);
-        if (!$this->gaugeTable->exist($internalKey)) {
-            $this->gaugeTable->set($internalKey, ['value' => 0]);
+        $metaKey = $this->metaKey($data);
+        if (array_key_exists($metaKey, $this->gaugeMap) === false) {
+            $this->gaugeMap[$metaKey] = [
+                'meta' => $this->metaData($data),
+                'samples' => [],
+            ];
         }
+        $internalKey = $this->internalKey($data);
         if ($data['command'] === Adapter::COMMAND_SET) {
-            $this->gaugeTable->set($internalKey, ['value' => $data['value']]);
+            $this->gaugeTable->set($internalKey, ['value' => (int)$data['value']]);
         } else {
-            $this->gaugeTable->incr($internalKey, 'value', $data['value']);
+            $this->gaugeTable->incr($internalKey, 'value', (int)$data['value']);
+        }
+        if (!in_array($internalKey, $this->gaugeMap[$metaKey]['samples'])) {
+            $this->gaugeMap[$metaKey]['samples'][] = $internalKey;
         }
     }
 
@@ -234,12 +268,47 @@ class TableMemory implements Adapter
      */
     public function updateCounter(array $data): void
     {
+        $metaKey = $this->metaKey($data);
+        if (array_key_exists($metaKey, $this->counterMap) === false) {
+            $this->counterMap[$metaKey] = [
+                'meta' => $this->metaData($data),
+                'samples' => [],
+            ];
+        }
         $internalKey = $this->internalKey($data);
-        if (!$this->counterTable->exist($internalKey) || $data['command'] === Adapter::COMMAND_SET) {
+        if ($data['command'] === Adapter::COMMAND_SET) {
             $this->counterTable->set($internalKey, ['value' => 0]);
         } else {
-            $this->counterTable->incr($internalKey, 'value', $data['value']);
+            $this->counterTable->incr($internalKey, 'value', (int)$data['value']);
         }
+        if (!in_array($internalKey, $this->counterMap[$metaKey]['samples'])) {
+            $this->counterMap[$metaKey]['samples'][] = $internalKey;
+        }
+    }
+
+    /**
+     * @param array $data
+     * @return string
+     */
+    private function metaKey(array $data): string
+    {
+        return implode(':', [
+            $data['type'],
+            $data['name']
+        ]);
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    private function metaData(array $data): array
+    {
+        $metricsMetaData = $data;
+        unset($metricsMetaData['value']);
+        unset($metricsMetaData['command']);
+        unset($metricsMetaData['labelValues']);
+        return $metricsMetaData;
     }
 
     /**
@@ -250,12 +319,9 @@ class TableMemory implements Adapter
     private function histogramBucketValueKey(array $data, $bucket): string
     {
         return implode(':', [
-            $data['name'],
-            $data['help'],
             $data['type'],
-            $this->encode($data['labelNames']),
+            $data['name'],
             $this->encode($data['labelValues']),
-            $this->encode($data['buckets']),
             $bucket,
         ]);
     }
@@ -268,10 +334,8 @@ class TableMemory implements Adapter
     private function internalKey(array $data): string
     {
         return implode(':', [
-            $data['name'],
-            $data['help'],
             $data['type'],
-            $this->encode($data['labelNames']),
+            $data['name'],
             $this->encode($data['labelValues'])
         ]);
     }
@@ -292,7 +356,10 @@ class TableMemory implements Adapter
      */
     private function encode(array $values): string
     {
-        $json = \msgpack_pack($values);
+        $json = json_encode($values);
+        if (false === $json) {
+            throw new \RuntimeException(json_last_error_msg());
+        }
         return base64_encode($json);
     }
 
@@ -303,7 +370,13 @@ class TableMemory implements Adapter
     private function decode($values): array
     {
         $json = base64_decode($values, true);
-        $decodedValues = \msgpack_unpack($json);
+        if (false === $json) {
+            throw new \RuntimeException('Cannot base64 decode label values');
+        }
+        $decodedValues = json_decode($json, true);
+        if (false === $decodedValues) {
+            throw new \RuntimeException(json_last_error_msg());
+        }
         return $decodedValues;
     }
 

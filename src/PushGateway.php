@@ -13,7 +13,7 @@ use rabbit\httpclient\Client;
  * Class PushGateway
  * @package Rabbit\Prometheus
  */
-class PushGateway extends \Prometheus\PushGateway
+class PushGateway
 {
     /**
      * @var string
@@ -28,7 +28,7 @@ class PushGateway extends \Prometheus\PushGateway
      * PushGateway constructor.
      * @param $address
      */
-    public function __construct($address)
+    public function __construct(string $address)
     {
         $this->address = $address;
         $this->client = new Client([
