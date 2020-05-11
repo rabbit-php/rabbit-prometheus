@@ -28,12 +28,12 @@ class TableMemory implements Adapter
      */
     private $histogramTable = null;
 
-    /** @var array */
-    private $counterMap = [];
-    /** @var array */
-    private $gaugeMap = [];
-    /** @var array */
-    private $histogramMap = [];
+    /** @var null|Table */
+    private $counterMap = null;
+    /** @var null|Table */
+    private $gaugeMap = null;
+    /** @var null|Table */
+    private $histogramMap = null;
 
     /**
      * TableMemory constructor.
@@ -47,13 +47,25 @@ class TableMemory implements Adapter
         $this->counterTable->column('value', Table::TYPE_INT, 8);
         $this->counterTable->create();
 
+        $this->counterMap = new Table($counterLine);
+        $this->counterMap->column('value', Table::TYPE_STRING, 65535);
+        $this->counterMap->create();
+
         $this->gaugeTable = new Table($gagueLine);
         $this->gaugeTable->column('value', Table::TYPE_INT, 8);
         $this->gaugeTable->create();
 
+        $this->gaugeMap = new Table($counterLine);
+        $this->gaugeMap->column('value', Table::TYPE_STRING, 65535);
+        $this->gaugeMap->create();
+
         $this->histogramTable = new Table($histogramLine);
         $this->histogramTable->column('value', Table::TYPE_FLOAT);
         $this->histogramTable->create();
+
+        $this->histogramMap = new Table($counterLine);
+        $this->histogramMap->column('value', Table::TYPE_STRING, 65535);
+        $this->histogramMap->create();
     }
 
     /**
@@ -100,9 +112,8 @@ class TableMemory implements Adapter
     private function collectHistograms(): array
     {
         $histograms = [];
-        $data = [];
-        foreach ($this->histogramMap as $histogram) {
-            $metaData = $histogram['meta'];
+        foreach ($this->histogramMap as $metaData) {
+            $metaData = json_decode($metaData, true);
             $data = [
                 'name' => $metaData['name'],
                 'help' => $metaData['help'],
@@ -114,12 +125,9 @@ class TableMemory implements Adapter
             $data['buckets'][] = '+Inf';
 
             $histogramBuckets = [];
-            foreach ($this->histogramTable as $key => $value) {
-                if (in_array($key, $histogram['samples'])) {
-                    $parts = explode(':', $key);
-                    $labelValues = $parts[2];
-                    $bucket = $parts[3];
-                    // Key by labelValues
+            foreach ($this->histogramMap as $key => $value) {
+                [$name, $type, $labelValues, $bucket] = explode(":", $key);
+                if ($name === $metaData['name']) {
                     $histogramBuckets[$labelValues][$bucket] = $value['value'];
                 }
             }
@@ -173,14 +181,15 @@ class TableMemory implements Adapter
     }
 
     /**
-     * @param array $metrics
+     * @param Table $metrics
      * @param Table $table
      * @return array
      */
-    private function internalCollect(array $metrics, Table $table): array
+    private function internalCollect(Table $metrics, Table $table): array
     {
         $result = [];
         foreach ($metrics as $metric) {
+            $metric = json_decode($metric, true);
             $metaData = $metric['meta'];
             $data = [
                 'name' => $metaData['name'],
@@ -189,9 +198,8 @@ class TableMemory implements Adapter
                 'labelNames' => $metaData['labelNames'],
             ];
             foreach ($table as $key => $value) {
-                if (in_array($key, $metric['samples'])) {
-                    $parts = explode(':', $key);
-                    $labelValues = $parts[2];
+                [$name, $type, $labelValues] = explode(':', $key);
+                if ($name === $metaData['name']) {
                     $data['samples'][] = [
                         'name' => $metaData['name'],
                         'labelNames' => [],
@@ -212,19 +220,15 @@ class TableMemory implements Adapter
      */
     public function updateHistogram(array $data): void
     {
-        $metaKey = $this->metaKey($data);
+        $mKey = $this->metaKey($data);
+        if (!$this->histogramMap->exist($mKey)) {
+            $this->histogramMap->set($mKey, ['value' => json_encode($this->metaData($data))]);
+        }
+        // Initialize the sum
         $sumKey = $this->histogramBucketValueKey($data, 'sum');
-        if (array_key_exists($metaKey, $this->histogramMap) === false) {
-            $this->histogramMap[$metaKey] = [
-                'meta' => $this->metaData($data),
-                'samples' => [],
-            ];
-        }
         $this->histogramTable->incr($sumKey, 'value', (float)$data['value']);
-        if (!in_array($sumKey, $this->histogramMap[$metaKey]['samples'])) {
-            $this->histogramMap[$metaKey]['samples'][] = $sumKey;
-        }
 
+        // Figure out in which bucket the observation belongs
         $bucketToIncrease = '+Inf';
         foreach ($data['buckets'] as $bucket) {
             if ($data['value'] <= $bucket) {
@@ -233,11 +237,8 @@ class TableMemory implements Adapter
             }
         }
 
-        $bucketKey = $this->histogramBucketValueKey($data, $bucketToIncrease);
-        $this->histogramTable->incr($bucketKey, 'value', (float)1);
-        if (!in_array($bucketKey, $this->histogramMap[$metaKey]['samples'])) {
-            $this->histogramMap[$metaKey]['samples'][] = $bucketKey;
-        }
+        $bkey = $this->histogramBucketValueKey($data, $bucketToIncrease);
+        $this->histogramTable->incr($bkey, 'value', (float)1);
     }
 
     /**
@@ -245,21 +246,15 @@ class TableMemory implements Adapter
      */
     public function updateGauge(array $data): void
     {
-        $metaKey = $this->metaKey($data);
-        if (array_key_exists($metaKey, $this->gaugeMap) === false) {
-            $this->gaugeMap[$metaKey] = [
-                'meta' => $this->metaData($data),
-                'samples' => [],
-            ];
+        $valueKey = $this->internalKey($data);
+        $mKey = $this->metaKey($data);
+        if (!$this->gaugeMap->exist($mKey)) {
+            $this->gaugeMap->set($mKey, ['value' => json_encode($this->metaData($data))]);
         }
-        $internalKey = $this->internalKey($data);
-        if ($data['command'] === Adapter::COMMAND_SET) {
-            $this->gaugeTable->set($internalKey, ['value' => (int)$data['value']]);
+        if ($data['command'] == Adapter::COMMAND_SET) {
+            $this->gaugeTable->set($valueKey, ['value' => (int)$data['value']]);
         } else {
-            $this->gaugeTable->incr($internalKey, 'value', (int)$data['value']);
-        }
-        if (!in_array($internalKey, $this->gaugeMap[$metaKey]['samples'])) {
-            $this->gaugeMap[$metaKey]['samples'][] = $internalKey;
+            $this->gaugeTable->incr($valueKey, 'value', (int)$data['value']);
         }
     }
 
@@ -268,22 +263,11 @@ class TableMemory implements Adapter
      */
     public function updateCounter(array $data): void
     {
-        $metaKey = $this->metaKey($data);
-        if (array_key_exists($metaKey, $this->counterMap) === false) {
-            $this->counterMap[$metaKey] = [
-                'meta' => $this->metaData($data),
-                'samples' => [],
-            ];
+        $mkey = $this->metaKey($data);
+        if ($this->counterMap->exist($mkey)) {
+            $this->counterMap->set($mKey, ['value' => json_encode($this->metaData($data))]);
         }
-        $internalKey = $this->internalKey($data);
-        if ($data['command'] === Adapter::COMMAND_SET) {
-            $this->counterTable->set($internalKey, ['value' => 0]);
-        } else {
-            $this->counterTable->incr($internalKey, 'value', (int)$data['value']);
-        }
-        if (!in_array($internalKey, $this->counterMap[$metaKey]['samples'])) {
-            $this->counterMap[$metaKey]['samples'][] = $internalKey;
-        }
+        $this->counterTable->incr($this->internalKey($data), 'value', (int)$data['value']);
     }
 
     /**
@@ -319,8 +303,8 @@ class TableMemory implements Adapter
     private function histogramBucketValueKey(array $data, $bucket): string
     {
         return implode(':', [
-            $data['type'],
             $data['name'],
+            $data['type'],
             $this->encode($data['labelValues']),
             $bucket,
         ]);
@@ -334,8 +318,8 @@ class TableMemory implements Adapter
     private function internalKey(array $data): string
     {
         return implode(':', [
-            $data['type'],
             $data['name'],
+            $data['type'],
             $this->encode($data['labelValues'])
         ]);
     }
