@@ -35,9 +35,8 @@ class ServerCollecter
     /**
      * @param int|null $workerId
      */
-    public function collectWorker(int $worker_id): void
+    public function collectWorker(int $workerId): void
     {
-        $workerId = posix_getpid() . "-" . $worker_id;
         $gauge = $this->registry->getOrRegisterGauge(CollectHelper::WORKER, "status", CollectHelper::HELP, [CollectHelper::LABLE]);
         $gauge->set(App::getServer()->getSwooleServer()->getWorkerStatus(), [$workerId]);
         CollectHelper::collectMem($this->registry, $workerId);
