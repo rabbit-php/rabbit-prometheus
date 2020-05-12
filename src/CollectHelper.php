@@ -17,12 +17,13 @@ class CollectHelper
     const WORKER = "worker";
     const HELP = "system";
     const LABLE = "worker_id";
+
     /**
      * @param CollectorRegistry $registry
      * @param int $workerId
      * @throws \Prometheus\Exception\MetricsRegistrationException
      */
-    public static function collectMem(CollectorRegistry $registry, int $workerId): void
+    public static function collectMem(CollectorRegistry $registry, string $workerId): void
     {
         $gauge = $registry->getOrRegisterGauge(self::WORKER, "mem_usage", self::HELP, [self::LABLE]);
         $gauge->set(memory_get_usage(true), [$workerId]);
@@ -35,7 +36,7 @@ class CollectHelper
      * @param int $workerId
      * @throws \Prometheus\Exception\MetricsRegistrationException
      */
-    public static function collectTimer(CollectorRegistry $registry, int $workerId): void
+    public static function collectTimer(CollectorRegistry $registry, string $workerId): void
     {
         $gauge = $registry->getOrRegisterGauge(self::WORKER, "timer_count", self::HELP, [self::LABLE]);
         $gauge->set(count(Timer::list()), [$workerId]);
@@ -46,7 +47,7 @@ class CollectHelper
      * @param int $workerId
      * @throws \Prometheus\Exception\MetricsRegistrationException
      */
-    public static function collectCoroutine(CollectorRegistry $registry, int $workerId): void
+    public static function collectCoroutine(CollectorRegistry $registry, string $workerId): void
     {
         foreach (Coroutine::stats() as $key => $value) {
             $gauge = $registry->getOrRegisterGauge(self::WORKER, "coroutine_$key", self::HELP, [self::LABLE]);
@@ -59,7 +60,7 @@ class CollectHelper
      * @param int $workerId
      * @throws \Prometheus\Exception\MetricsRegistrationException
      */
-    public static function collectPool(CollectorRegistry $registry, int $workerId): void
+    public static function collectPool(CollectorRegistry $registry, string $workerId): void
     {
         foreach (PoolManager::getPools() as $pool) {
             $gauge = $registry->getOrRegisterGauge(self::WORKER, "pool", self::HELP, [self::LABLE, 'pool_dsn']);

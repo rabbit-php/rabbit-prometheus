@@ -35,8 +35,9 @@ class ServerCollecter
     /**
      * @param int|null $workerId
      */
-    public function collectWorker(int $workerId): void
+    public function collectWorker(int $worker_id): void
     {
+        $workerId = posix_getpid() . "-" . $worker_id;
         $gauge = $this->registry->getOrRegisterGauge(CollectHelper::WORKER, "status", CollectHelper::HELP, [CollectHelper::LABLE]);
         $gauge->set(App::getServer()->getSwooleServer()->getWorkerStatus(), [$workerId]);
         CollectHelper::collectMem($this->registry, $workerId);
@@ -47,8 +48,10 @@ class ServerCollecter
 
     public function collectServer(): void
     {
-        $counter = $this->registry->getOrRegisterGauge('server', 'connections', CollectHelper::HELP);
-        $list = App::getServer()->getSwooleServer()->getClientList();
-        $counter->set($list ? count($list) : 0);
+        $list = App::getServer()->getSwooleServer()->stats();
+        foreach ($list as $key => $value) {
+            $counter = $this->registry->getOrRegisterGauge('server', 'stats', CollectHelper::HELP, ['type']);
+            $counter->set($value, [$key]);
+        }
     }
 }
