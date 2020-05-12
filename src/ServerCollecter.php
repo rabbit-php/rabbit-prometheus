@@ -5,6 +5,7 @@ namespace Rabbit\Prometheus;
 
 use Prometheus\CollectorRegistry;
 use rabbit\App;
+use rabbit\helper\ArrayHelper;
 
 /**
  * Class ServerCollecter
@@ -47,10 +48,12 @@ class ServerCollecter
 
     public function collectServer(): void
     {
-        $list = App::getServer()->getSwooleServer()->stats();
+        $server = App::getServer()->getSwooleServer();
+        $list = $server->stats();
         $counter = $this->registry->getOrRegisterGauge('server', 'stats', CollectHelper::HELP, ['type']);
         foreach ($list as $key => $value) {
             $counter->set($value, [$key]);
         }
+        $counter->set(ArrayHelper::getValue($server->setting, 'task_worker_num', 0), ['task_worker_num']);
     }
 }
