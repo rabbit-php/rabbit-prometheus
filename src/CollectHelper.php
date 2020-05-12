@@ -63,7 +63,8 @@ class CollectHelper
     public static function collectPool(CollectorRegistry $registry, int $workerId): void
     {
         foreach (PoolManager::getPools() as $pool) {
-            $gauge = $registry->getOrRegisterGauge(self::WORKER, "pool", self::HELP, [self::LABLE, 'pool_dsn']);
+            $gauge = $registry->getOrRegisterGauge(self::WORKER, "pool_idle", self::HELP, [self::LABLE, 'pool_dsn']);
+            $mgauge = $registry->getOrRegisterGauge(self::WORKER, "pool_num", self::HELP, [self::LABLE, 'pool_dsn']);
             $addrList = [];
             foreach ($pool->getServiceList(false, false) as $uri) {
                 $parsed_url = parse_url($uri);
@@ -72,7 +73,8 @@ class CollectHelper
                 $port = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
                 $addrList[] = "$scheme$host$port";
             }
-            $gauge->set($pool->getCurrentCount(), [$workerId, implode(',', $addrList)]);
+            $gauge->set($pool->getUseChannel() ? $pool->getChannelPool()->length() : $pool->getQueuePool()->count(), [$workerId, implode(',', $addrList)]);
+            $mgauge->set($pool->getPoolConfig()->getMaxActive(), [$workerId, implode(',', $addrList)]);
         }
     }
 }
