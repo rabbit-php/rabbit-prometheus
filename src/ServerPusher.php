@@ -28,7 +28,7 @@ class ServerPusher implements WorkerHandlerInterface
      * @param PushGateway $pushGateway
      * @param int $tick
      */
-    public function __construct(ServerCollecter $collector, PushGateway $pushGateway, int $tick = 5)
+    public function __construct(ServerCollecter $collector, PushGateway $pushGateway, int $tick = 60)
     {
         $this->collector = $collector;
         $this->pushGateway = $pushGateway;
@@ -48,7 +48,7 @@ class ServerPusher implements WorkerHandlerInterface
 
         if ((isset($server->setting['task_worker_num']) && $worker_id === $server->setting['worker_num']) ||
             (!isset($server->setting['task_worker_num']) && $worker_id === 0)) {
-            Timer::tick($this->tick * 1500, function () {
+            Timer::tick($this->tick * 1000, function () {
                 $this->collector->collectServer();
                 $this->pushGateway->push($this->collector->getRegistry(), getDI('appName', false, "Rabbit"), ['instance' => current(swoole_get_local_ip())]);
             });

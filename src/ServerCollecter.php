@@ -48,8 +48,8 @@ class ServerCollecter
     public function collectServer(): void
     {
         $list = App::getServer()->getSwooleServer()->stats();
+        $counter = $this->registry->getOrRegisterGauge('server', 'stats', CollectHelper::HELP, ['type']);
         foreach ($list as $key => $value) {
-            $counter = $this->registry->getOrRegisterGauge('server', 'stats', CollectHelper::HELP, ['type']);
             $counter->set($value, [$key]);
         }
     }
