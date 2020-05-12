@@ -41,30 +41,33 @@ class TableMemory implements Adapter
      * @param int $gagueLine
      * @param int $histogramLine
      */
-    public function __construct(int $counterLine = 1024, int $gagueLine = 1024, int $histogramLine = 1024)
+    public function __construct(int $mapLine = 1024, int $counterLine = 1024, int $gagueLine = 1024, int $histogramLine = 1024)
     {
         $this->counterTable = new Table($counterLine);
         $this->counterTable->column('value', Table::TYPE_INT, 8);
+        $this->counterTable->column('labels', Table::TYPE_STRING, $counterLine * 3);
         $this->counterTable->create();
 
-        $this->counterMap = new Table($counterLine);
-        $this->counterMap->column('value', Table::TYPE_STRING, 65535);
+        $this->counterMap = new Table($mapLine);
+        $this->counterMap->column('value', Table::TYPE_STRING, $mapLine * 5);
         $this->counterMap->create();
 
         $this->gaugeTable = new Table($gagueLine);
         $this->gaugeTable->column('value', Table::TYPE_INT, 8);
+        $this->gaugeTable->column('labels', Table::TYPE_STRING, $gagueLine * 3);
         $this->gaugeTable->create();
 
-        $this->gaugeMap = new Table($counterLine);
-        $this->gaugeMap->column('value', Table::TYPE_STRING, 65535);
+        $this->gaugeMap = new Table($mapLine);
+        $this->gaugeMap->column('value', Table::TYPE_STRING, $mapLine * 5);
         $this->gaugeMap->create();
 
         $this->histogramTable = new Table($histogramLine);
         $this->histogramTable->column('value', Table::TYPE_FLOAT);
+        $this->histogramTable->column('labels', Table::TYPE_STRING, $histogramLine * 3);
         $this->histogramTable->create();
 
-        $this->histogramMap = new Table($counterLine);
-        $this->histogramMap->column('value', Table::TYPE_STRING, 65535);
+        $this->histogramMap = new Table($mapLine);
+        $this->histogramMap->column('value', Table::TYPE_STRING, $mapLine * 5);
         $this->histogramMap->create();
     }
 
@@ -125,8 +128,8 @@ class TableMemory implements Adapter
             $data['buckets'][] = '+Inf';
 
             $histogramBuckets = [];
-            foreach ($this->histogramTable as $key => $value) {
-                [$name, $labelValues, $bucket] = explode(":", $key);
+            foreach ($this->histogramTable as $value) {
+                [$name, $labelValues, $bucket] = explode(":", $value['labels']);
                 if ($name === $metaData['name']) {
                     $histogramBuckets[$labelValues][$bucket] = $value['value'];
                 }
@@ -196,8 +199,8 @@ class TableMemory implements Adapter
                 'type' => $metaData['type'],
                 'labelNames' => $metaData['labelNames'],
             ];
-            foreach ($table as $key => $value) {
-                [$name, $labelValues] = explode(':', $key);
+            foreach ($table as $value) {
+                [$name, $labelValues] = explode(':', $value['labels']);
                 if ($name === $metaData['name']) {
                     $data['samples'][] = [
                         'name' => $metaData['name'],
@@ -223,7 +226,11 @@ class TableMemory implements Adapter
             $this->histogramMap->set($data['name'], ['value' => json_encode($this->metaData($data))]);
         }
         // Initialize the sum
-        $sumKey = $this->histogramBucketValueKey($data, 'sum');
+        $sumLabels = $this->histogramBucketValueKey($data, 'sum');
+        $sumKey = md5($sumLabels);
+        if (!$this->histogramTable->exist($sumKey)) {
+            $this->histogramTable->set($sumKey, ['labels' => $sumLabels, 'value' => 0.0]);
+        }
         $this->histogramTable->incr($sumKey, 'value', (float)$data['value']);
 
         // Figure out in which bucket the observation belongs
@@ -235,7 +242,11 @@ class TableMemory implements Adapter
             }
         }
 
-        $bkey = $this->histogramBucketValueKey($data, $bucketToIncrease);
+        $bucketLabels = $this->histogramBucketValueKey($data, $bucketToIncrease);
+        $bkey = md5($bucketLabels);
+        if (!$this->histogramTable->exist($bkey)) {
+            $this->histogramTable->set($bkey, ['labels' => $bucketLabels, 'value' => 0.0]);
+        }
         $this->histogramTable->incr($bkey, 'value', (float)1);
     }
 
@@ -244,9 +255,13 @@ class TableMemory implements Adapter
      */
     public function updateGauge(array $data): void
     {
-        $valueKey = $this->internalKey($data);
+        $labels = $this->internalKey($data);
+        $valueKey = md5($labels);
         if (!$this->gaugeMap->exist($data['name'])) {
             $this->gaugeMap->set($data['name'], ['value' => json_encode($this->metaData($data))]);
+        }
+        if (!$this->gaugeTable->exist($valueKey)) {
+            $this->gaugeTable->set($valueKey, ['labels' => $labels, 'value' => 0]);
         }
         if ($data['command'] == Adapter::COMMAND_SET) {
             $this->gaugeTable->set($valueKey, ['value' => (int)$data['value']]);
@@ -263,7 +278,12 @@ class TableMemory implements Adapter
         if (!$this->counterMap->exist($data['name'])) {
             $this->counterMap->set($data['name'], ['value' => json_encode($this->metaData($data))]);
         }
-        $this->counterTable->incr($this->internalKey($data), 'value', (int)$data['value']);
+        $labels = $this->internalKey($data);
+        $key = md5($labels);
+        if (!$this->counterTable->exist($key)) {
+            $this->counterTable->set($key, ['labels' => $labels, 'value' => 0]);
+        }
+        $this->counterTable->incr($key, 'value', (int)$data['value']);
     }
 
     /**
