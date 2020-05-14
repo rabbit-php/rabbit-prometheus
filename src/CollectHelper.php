@@ -64,7 +64,7 @@ class CollectHelper
             $gauge = $registry->getOrRegisterGauge(self::WORKER, "pool_idle", self::HELP, [self::LABLE, 'pool_dsn']);
             $mgauge = $registry->getOrRegisterGauge(self::WORKER, "pool_num", self::HELP, [self::LABLE, 'pool_dsn']);
             $addrList = [];
-            foreach ($pool->getServiceList(false, false) as $uri) {
+            foreach ($pool->getServiceList( ) as $uri) {
                 $parsed_url = parse_url($uri);
                 $scheme = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
                 $host = isset($parsed_url['host']) ? $parsed_url['host'] : '';
