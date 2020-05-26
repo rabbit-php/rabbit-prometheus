@@ -64,14 +64,14 @@ class CollectHelper
             $gauge = $registry->getOrRegisterGauge(self::WORKER, "pool_idle", self::HELP, [self::LABLE, 'pool_dsn']);
             $mgauge = $registry->getOrRegisterGauge(self::WORKER, "pool_num", self::HELP, [self::LABLE, 'pool_dsn']);
             $addrList = [];
-            foreach ($pool->getServiceList( ) as $uri) {
+            foreach ($pool->getServiceList() as $uri) {
                 $parsed_url = parse_url($uri);
                 $scheme = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
                 $host = isset($parsed_url['host']) ? $parsed_url['host'] : '';
                 $port = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
                 $addrList[] = "$scheme$host$port";
             }
-            $gauge->set($pool->getUseChannel() ? $pool->getChannelPool()->length() : $pool->getQueuePool()->count(), [$workerId, implode(',', $addrList)]);
+            $gauge->set($pool->getPool()->length(), [$workerId, implode(',', $addrList)]);
             $mgauge->set($pool->getPoolConfig()->getMaxActive(), [$workerId, implode(',', $addrList)]);
         }
     }
