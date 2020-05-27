@@ -26,7 +26,9 @@ class CollectHelper
     public static function collectMem(CollectorRegistry $registry, int $workerId): void
     {
         $gauge = $registry->getOrRegisterGauge(self::WORKER, "mem_usage", self::HELP, [self::LABLE]);
-        $gauge->set(memory_get_peak_usage(true), [$workerId]);
+        $peak = $registry->getOrRegisterGauge(self::WORKER, "mem_peak_usage", self::HELP, [self::LABLE]);
+        $gauge->set(memory_get_usage(true), [$workerId]);
+        $peak->set(memory_get_peak_usage(true), [$workerId]);
     }
 
     /**
