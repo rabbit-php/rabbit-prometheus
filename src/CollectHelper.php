@@ -76,7 +76,7 @@ class CollectHelper
             }
             $labels = [$workerId, implode(',', $addrList)];
             $gauge->set($pool->getPool()->length(), $labels);
-            $mgauge->set($pool->getPoolConfig()->getMaxActive(), $labels);
+            $mgauge->set($pool->getPoolConfig()->getMinActive(), $labels);
             $current->set($pool->getCurrentCount(), $labels);
         }
     }
