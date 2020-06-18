@@ -3,8 +3,8 @@
   "description": "rabbit prometheus",
   "type": "library",
   "require": {
-    "rabbit/framework": "dev-master",
-    "rabbit/httpclient": "dev-master",
+    "rabbit/framework": "^1.0",
+    "rabbit/httpclient": "^1.0",
     "endclothing/prometheus_client_php": "^1.0"
   },
   "license": "MIT",
