@@ -8,6 +8,7 @@ use Prometheus\CollectorRegistry;
 use Prometheus\RenderTextFormat;
 use rabbit\App;
 use rabbit\httpclient\Client;
+use Swlib\Saber\Request;
 
 /**
  * Class PushGateway
@@ -87,6 +88,19 @@ class PushGateway
         $requestOptions = [
             'headers' => [
                 'Content-Type' => RenderTextFormat::MIME_TYPE,
+            ],
+            'before' => [
+                function (Request $request) {
+                    $uri = $request->getUri();
+                    App::info(
+                        sprintf(
+                            "Request %s %s",
+                            $request->getMethod(),
+                            $uri->getScheme() . "://" . $uri->getHost() . $uri->getPath()
+                        ),
+                        "http"
+                    );
+                },
             ],
             'timeout' => 20,
         ];

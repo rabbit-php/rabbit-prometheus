@@ -42,13 +42,13 @@ class ServerPusher implements WorkerHandlerInterface
     public function handle(int $worker_id): void
     {
         $server = App::getServer()->getSwooleServer();
-        Timer::addTickTimer('prom.collect', $this->tick * 1000, function () use ($worker_id) {
+        Timer::addTickTimer('prom.collect',$this->tick * 1000, function () use ($worker_id) {
             $this->collector->collectWorker($worker_id);
         });
 
         if ((isset($server->setting['task_worker_num']) && $worker_id === $server->setting['worker_num']) ||
             (!isset($server->setting['task_worker_num']) && $worker_id === 0)) {
-            Timer::addTickTimer('prom.push', $this->tick * 1000, function () {
+            Timer::addTickTimer('prom.push',$this->tick * 1000, function () {
                 $this->collector->collectServer();
                 $this->pushGateway->push($this->collector->getRegistry(), getDI('appName', false, "Rabbit"), ['instance' => current(swoole_get_local_ip())]);
             });
