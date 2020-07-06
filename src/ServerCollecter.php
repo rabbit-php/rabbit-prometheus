@@ -4,8 +4,9 @@ declare(strict_types=1);
 namespace Rabbit\Prometheus;
 
 use Prometheus\CollectorRegistry;
-use rabbit\App;
-use rabbit\helper\ArrayHelper;
+use Prometheus\Exception\MetricsRegistrationException;
+use Rabbit\Base\Helper\ArrayHelper;
+use Rabbit\Server\ServerHelper;
 
 /**
  * Class ServerCollecter
@@ -14,7 +15,7 @@ use rabbit\helper\ArrayHelper;
 class ServerCollecter
 {
     /** @var CollectorRegistry */
-    protected $registry;
+    protected CollectorRegistry $registry;
 
     /**
      * ServerCollecter constructor.
@@ -35,11 +36,12 @@ class ServerCollecter
 
     /**
      * @param int|null $workerId
+     * @throws MetricsRegistrationException
      */
     public function collectWorker(int $workerId): void
     {
         $gauge = $this->registry->getOrRegisterGauge(CollectHelper::WORKER, "status", CollectHelper::HELP, [CollectHelper::LABLE]);
-        $gauge->set(App::getServer()->getSwooleServer()->getWorkerStatus(), [$workerId]);
+        $gauge->set(ServerHelper::getServer()->getSwooleServer()->getWorkerStatus(), [$workerId]);
         CollectHelper::collectMem($this->registry, $workerId);
         CollectHelper::collectTimer($this->registry, $workerId);
         CollectHelper::collectCoroutine($this->registry, $workerId);
@@ -48,7 +50,7 @@ class ServerCollecter
 
     public function collectServer(): void
     {
-        $server = App::getServer()->getSwooleServer();
+        $server = ServerHelper::getServer()->getSwooleServer();
         $list = $server->stats();
         $counter = $this->registry->getOrRegisterGauge('server', 'stats', CollectHelper::HELP, ['type']);
         foreach ($list as $key => $value) {

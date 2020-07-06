@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Rabbit\Prometheus;
 
-use Exception;
-use rabbit\App;
-use rabbit\core\Timer;
-use rabbit\server\WorkerHandlerInterface;
+use Rabbit\Base\Core\Exception;
+use Rabbit\Base\Core\Timer;
+use Rabbit\Server\WorkerHandlerInterface;
 
 /**
  * Class PushWorker
@@ -16,11 +15,11 @@ use rabbit\server\WorkerHandlerInterface;
 class ServerPusher implements WorkerHandlerInterface
 {
     /** @var int */
-    protected $tick;
+    protected int $tick;
     /** @var ServerCollecter */
-    protected $collector;
+    protected ServerCollecter $collector;
     /** @var PushGateway */
-    protected $pushGateway;
+    protected PushGateway $pushGateway;
 
     /**
      * PushWorker constructor.

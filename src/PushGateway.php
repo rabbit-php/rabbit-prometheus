@@ -3,12 +3,12 @@ declare(strict_types=1);
 
 namespace Rabbit\Prometheus;
 
-use Exception;
 use Prometheus\CollectorRegistry;
 use Prometheus\RenderTextFormat;
-use rabbit\App;
-use rabbit\httpclient\Client;
+use Rabbit\Base\App;
+use Rabbit\HttpClient\Client;
 use Swlib\Saber\Request;
+use Throwable;
 
 /**
  * Class PushGateway
@@ -19,11 +19,11 @@ class PushGateway
     /**
      * @var string
      */
-    private $address;
+    private string $address;
     /** @var Client */
-    private $client;
-
-    protected $renderer;
+    private Client $client;
+    /** @var RenderTextFormat */
+    protected RenderTextFormat $renderer;
 
     /**
      * PushGateway constructor.
@@ -42,7 +42,7 @@ class PushGateway
      * @param CollectorRegistry $collectorRegistry
      * @param string $job
      * @param array|null $groupingKey
-     * @throws Exception
+     * @throws Throwable
      */
     public function push(CollectorRegistry $collectorRegistry, string $job, array $groupingKey = null): void
     {
@@ -53,7 +53,7 @@ class PushGateway
      * @param CollectorRegistry $collectorRegistry
      * @param string $job
      * @param array|null $groupingKey
-     * @throws Exception
+     * @throws Throwable
      */
     public function pushAdd(CollectorRegistry $collectorRegistry, string $job, array $groupingKey = null): void
     {
@@ -63,7 +63,7 @@ class PushGateway
     /**
      * @param string $job
      * @param array|null $groupingKey
-     * @throws Exception
+     * @throws Throwable
      */
     public function delete(string $job, array $groupingKey = null): void
     {
@@ -75,7 +75,7 @@ class PushGateway
      * @param string $job
      * @param array $groupingKey
      * @param string $method
-     * @throws Exception
+     * @throws Throwable
      */
     private function doRequest(CollectorRegistry $collectorRegistry, string $job, array $groupingKey, $method): void
     {

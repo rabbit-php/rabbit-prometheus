@@ -16,27 +16,28 @@ class TableMemory implements Adapter
     /**
      * @var null|Table
      */
-    private $counterTable = null;
+    private ?Table $counterTable = null;
 
     /**
      * @var null|Table
      */
-    private $gaugeTable = null;
+    private ?Table $gaugeTable = null;
 
     /**
      * @var null|Table
      */
-    private $histogramTable = null;
+    private ?Table $histogramTable = null;
 
     /** @var null|Table */
-    private $counterMap = null;
+    private ?Table $counterMap = null;
     /** @var null|Table */
-    private $gaugeMap = null;
+    private ?Table $gaugeMap = null;
     /** @var null|Table */
-    private $histogramMap = null;
+    private ?Table $histogramMap = null;
 
     /**
      * TableMemory constructor.
+     * @param int $mapLine
      * @param int $counterLine
      * @param int $gagueLine
      * @param int $histogramLine

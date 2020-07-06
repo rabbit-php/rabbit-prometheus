@@ -3,9 +3,17 @@
   "description": "rabbit prometheus",
   "type": "library",
   "require": {
-    "rabbit/framework": "^1.0",
-    "rabbit/httpclient": "^1.0",
-    "endclothing/prometheus_client_php": "^1.0"
+    "php": ">=7.4.0",
+    "ext-swoole": ">=4.5.0",
+    "rabbit/base": "dev-master",
+    "rabbit/pool": "dev-master",
+    "rabbit/httpclient": "dev-master",
+    "endclothing/prometheus_client_php": "^1.0",
+    "ext-json": "*"
+  },
+  "require-dev": {
+    "swoole/ide-helper": "@dev",
+    "phpunit/phpunit": "*"
   },
   "license": "MIT",
   "authors": [
