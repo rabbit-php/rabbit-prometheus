@@ -69,7 +69,7 @@ class CollectHelper
                     $scheme = isset($parsed_url['scheme']) ? $parsed_url['scheme'] . '://' : '';
                     $host = isset($parsed_url['host']) ? $parsed_url['host'] : '';
                     $port = isset($parsed_url['port']) ? ':' . $parsed_url['port'] : '';
-                    $addrList[] = "$scheme$host$port";
+                    $addrList[] = $pool->getPoolConfig()->getName() . "-$scheme$host$port";
                 }
                 $mgauge = $registry->getOrRegisterGauge(self::WORKER, "pool_num", self::HELP, [self::LABLE, 'pool_dsn']);
                 $current = $registry->getOrRegisterGauge(self::WORKER, "pool_current", self::HELP, [self::LABLE, 'pool_dsn']);
