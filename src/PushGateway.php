@@ -96,7 +96,7 @@ class PushGateway
                         sprintf(
                             "Request %s %s",
                             $request->getMethod(),
-                            $uri->getScheme() . "://" . $uri->getHost() . $uri->getPath()
+                            $uri->getScheme() . "://" . $uri->getHost() . (null === $port = $uri->getPort() ? '' : ":$port") . $uri->getPath()
                         ),
                         "http"
                     );

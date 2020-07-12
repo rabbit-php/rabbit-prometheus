@@ -6,6 +6,7 @@ namespace Rabbit\Prometheus;
 
 use Rabbit\Base\Core\Exception;
 use Rabbit\Base\Core\Timer;
+use Rabbit\Server\ServerHelper;
 use Rabbit\Server\WorkerHandlerInterface;
 
 /**
@@ -40,7 +41,7 @@ class ServerPusher implements WorkerHandlerInterface
      */
     public function handle(int $worker_id): void
     {
-        $server = App::getServer()->getSwooleServer();
+        $server = ServerHelper::getServer()->getSwooleServer();
         Timer::addTickTimer('prom.collect',$this->tick * 1000, function () use ($worker_id) {
             $this->collector->collectWorker($worker_id);
         });
