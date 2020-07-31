@@ -16,14 +16,10 @@ use Throwable;
  */
 class PushGateway
 {
-    /**
-     * @var string
-     */
     private string $address;
-    /** @var Client */
     private Client $client;
-    /** @var RenderTextFormat */
     protected RenderTextFormat $renderer;
+    protected bool $onLog = false;
 
     /**
      * PushGateway constructor.
@@ -89,20 +85,20 @@ class PushGateway
             'headers' => [
                 'Content-Type' => RenderTextFormat::MIME_TYPE,
             ],
-            'before' => [
-                function (Request $request) {
-                    $uri = $request->getUri();
-                    App::info(
-                        sprintf(
-                            "Request %s %s",
-                            $request->getMethod(),
-                            $uri->getScheme() . "://" . $uri->getHost() . (($port = $uri->getPort()) ? ":$port" : '') . $uri->getPath()
-                        ),
-                        "http"
-                    );
-                },
-            ],
             'timeout' => 20,
+        ];
+        $this->onLog && $requestOptions['before'] = [
+            function (Request $request) {
+                $uri = $request->getUri();
+                App::info(
+                    sprintf(
+                        "Request %s %s",
+                        $request->getMethod(),
+                        $uri->getScheme() . "://" . $uri->getHost() . (($port = $uri->getPort()) ? ":$port" : '') . $uri->getPath()
+                    ),
+                    "http"
+                );
+            },
         ];
         if ($method != 'delete') {
             $requestOptions['body'] = $this->renderer->render($collectorRegistry->getMetricFamilySamples());
